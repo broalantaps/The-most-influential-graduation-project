@@ -177,6 +177,8 @@ class CompressorConfig(PretrainedConfig):
         attention_dropout=0.0,
         max_segment_length=2048,
         mem_token_num=512,
+        membos_token_id=151668,
+        memeos_token_id=151669,
         **kwargs,
     ):
         self.vocab_size = vocab_size
@@ -207,7 +209,9 @@ class CompressorConfig(PretrainedConfig):
         # Memory Agentic
         self.max_segment_length = max_segment_length
         self.mem_token_num = mem_token_num
-
+        self.membos_token_id = membos_token_id
+        self.memeos_token_id = memeos_token_id
+        
         # Validate the correctness of rotary position embeddings parameters
         # BC: if there is a 'type' field, move it to 'rope_type'.
         if self.rope_scaling is not None and "type" in self.rope_scaling:

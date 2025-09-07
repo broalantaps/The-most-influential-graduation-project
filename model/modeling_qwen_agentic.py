@@ -8,11 +8,14 @@ Qwen3 Agentic Model Implementation
 import torch
 import torch.nn as nn
 from typing import Optional, Tuple, Union, List
-from transformers import PreTrainedModel, AutoModel, AutoModelForCausalLM, AutoConfig
+from transformers import PreTrainedModel, AutoModel, AutoTokenizer, AutoModelForCausalLM, AutoConfig
 from transformers.modeling_outputs import CausalLMOutputWithPast, BaseModelOutputWithPast
 from transformers.cache_utils import Cache, DynamicCache
 from transformers.activations import ACT2FN
+from transformers.utils import logging
 from .configuration_qwen_agentic import Qwen3AgenticConfig
+
+logger = logging.get_logger(__name__)
 
 class Qwen3MLP(nn.Module):
     def __init__(self, config):
@@ -49,18 +52,18 @@ class Qwen3AgenticModel(PreTrainedModel):
         super().__init__(config)
         self.config = config
         
-        # 初始化三个组件
         self._init_compressor()
         self._init_converter()
         self._init_decoder()
         
-        # 初始化权重
-        self.post_init()
-    
+        # DEPRECATED, Seperated into outside
+        # self._init_tokenizer()
+
+        # Init weights
+        self.post_init()    
+
     def _init_compressor(self):
-        """初始化压缩器 (基于 Qwen3-0.6B)"""
         try:
-            # 尝试从预训练模型加载
             compressor_config = AutoConfig.from_pretrained(
                 self.config.compressor_config.base_model if hasattr(self.config.compressor_config, "base_model") else "Qwen/Qwen3-0.6B"
             )
@@ -68,22 +71,20 @@ class Qwen3AgenticModel(PreTrainedModel):
                 self.config.compressor_config.base_model if hasattr(self.config.compressor_config, "base_model") else "Qwen/Qwen3-0.6B",
                 dtype=compressor_config.torch_dtype
             )
-            print(f"✅ 成功加载压缩器: 'Qwen/Qwen3-0.6B'")
+            
+
         except Exception as e:
-            print(f"⚠️  无法加载预训练压缩器: {e}")
-            print("使用随机初始化的压缩器")
-            # 这里你可以添加随机初始化的代码
-            raise NotImplementedError("随机初始化压缩器尚未实现")
+            logger.info(f"Init compressor error: {e}")
     
     def _init_converter(self):
-        """初始化转换器"""
-        self.converter = MemoryConverter(self.config.converter_config)
-        print("✅ 初始化转换器完成")
+        try:
+            self.converter = MemoryConverter(self.config.converter_config)
+        except Exception as e:
+            logger.info(f"Init converter error: {e}")
+    
     
     def _init_decoder(self):
-        """初始化解码器 (基于 Qwen3-14B)"""
         try:
-            # 尝试从预训练模型加载
             decoder_config = AutoConfig.from_pretrained(
                 self.config.decoder_config.base_model if hasattr(self.config.decoder_config, "base_model") else "Qwen/Qwen3-14B"
 
@@ -92,13 +93,26 @@ class Qwen3AgenticModel(PreTrainedModel):
                 self.config.decoder_config.base_model if hasattr(self.config.decoder_config, "base_model") else "Qwen/Qwen3-14B",
                 dtype=decoder_config.torch_dtype
             )
-            print(f"✅ 成功加载解码器: 'Qwen/Qwen3-14B")
         except Exception as e:
-            print(f"⚠️  无法加载预训练解码器: {e}")
-            print("使用随机初始化的解码器")
-            # 这里你可以添加随机初始化的代码
-            raise NotImplementedError("随机初始化解码器尚未实现")
+            logger.info(f"Init decoder error: {e}")
     
+    # DEPRECATED, Seperated into outside
+    # def _init_tokenizer(self):
+    #     try:
+    #         self.tokenizer = AutoTokenizer.from_pretrained(
+    #             self.config.compressor_config.base_model if hasattr(self.config.compressor_config, "base_model") else "Qwen/Qwen3-0.6B"
+    #         )
+            
+    #         all_special_tokens = ["<|mem_start|>", "<|mem_end|>"] + [f"<|mem_{i}|>" for i in range(self.config.compressor_config.mem_token_num)]
+    #         logger.info(self.tokenizer.add_special_tokens({"additional_special_tokens": all_special_tokens}))
+    #         self.compressor.resize_token_embeddings(len(self.tokenizer))
+
+    #         # TODO: init embedding weights
+    #         logger.info("Waiting to test init embedding weihts, not implement now!!!")
+
+    #     except Exception as e:
+    #         logger.info(f"Init tokenizer error: {e}")
+
     def compress_memory(
         self,
         input_ids: torch.LongTensor,
@@ -106,11 +120,10 @@ class Qwen3AgenticModel(PreTrainedModel):
         **kwargs
     ) -> torch.Tensor:
         """
-        使用压缩器处理输入，生成记忆tokens
-        
         Args:
             input_ids: 输入token ids
             attention_mask: 注意力掩码
+            Comp
             
         Returns:
             memory_tokens: 压缩后的记忆tokens [batch_size, mem_token_num, hidden_size]
@@ -302,6 +315,5 @@ class Qwen3Agentic(Qwen3AgenticModel):
     def __init__(self, config: Qwen3AgenticConfig):
         super().__init__(config)
         
-        # 初始化权重
         self.post_init()
     
