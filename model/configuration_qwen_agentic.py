@@ -238,11 +238,12 @@ class ConverterConfig(PretrainedConfig):
         self,
         hidden_size=3072,
         intermediate_size=5120,
+        hidden_act="silu",
         **kwargs,
     ):
         self.hidden_size = hidden_size
         self.intermediate_size = intermediate_size
-
+        self.hidden_act = hidden_act
 
         super().__init__(
             **kwargs,
