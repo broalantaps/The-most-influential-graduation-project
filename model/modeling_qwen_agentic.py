@@ -66,7 +66,7 @@ class Qwen3AgenticModel(PreTrainedModel):
             )
             self.compressor = AutoModel.from_pretrained(
                 self.config.compressor_config.base_model if hasattr(self.config.compressor_config, "base_model") else "Qwen/Qwen3-0.6B",
-                config=compressor_config
+                dtype=compressor_config.torch_dtype
             )
             print(f"✅ 成功加载压缩器: 'Qwen/Qwen3-0.6B'")
         except Exception as e:
@@ -90,7 +90,7 @@ class Qwen3AgenticModel(PreTrainedModel):
             )
             self.decoder = AutoModelForCausalLM.from_pretrained(
                 self.config.decoder_config.base_model if hasattr(self.config.decoder_config, "base_model") else "Qwen/Qwen3-14B",
-                config=decoder_config
+                dtype=decoder_config.torch_dtype
             )
             print(f"✅ 成功加载解码器: 'Qwen/Qwen3-14B")
         except Exception as e:
