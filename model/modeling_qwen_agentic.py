@@ -8,10 +8,10 @@ Qwen3 Agentic Model Implementation
 import torch
 import torch.nn as nn
 from typing import Optional, Tuple, Union, List
-from transformers import PreTrainedModel, AutoModel, AutoConfig
+from transformers import PreTrainedModel, AutoModel, AutoModelForCausalLM, AutoConfig
 from transformers.modeling_outputs import CausalLMOutputWithPast, BaseModelOutputWithPast
 from transformers.cache_utils import Cache, DynamicCache
-
+from transformers.activations import ACT2FN
 from .configuration_qwen_agentic import Qwen3AgenticConfig
 
 class Qwen3MLP(nn.Module):
@@ -31,7 +31,7 @@ class Qwen3MLP(nn.Module):
 
 class MemoryConverter(Qwen3MLP):
     def __init__(self, config):
-        super().__init__()
+        super().__init__(config=config)
         self.rms_norm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         
     def forward(self, x):
@@ -62,13 +62,13 @@ class Qwen3AgenticModel(PreTrainedModel):
         try:
             # 尝试从预训练模型加载
             compressor_config = AutoConfig.from_pretrained(
-                self.config.compressor_config.get("base_model", "Qwen/Qwen3-0.6B")
+                self.config.compressor_config.base_model if hasattr(self.config.compressor_config, "base_model") else "Qwen/Qwen3-0.6B"
             )
             self.compressor = AutoModel.from_pretrained(
-                self.config.compressor_config.get("base_model", "Qwen/Qwen3-0.6B"),
+                self.config.compressor_config.base_model if hasattr(self.config.compressor_config, "base_model") else "Qwen/Qwen3-0.6B",
                 config=compressor_config
             )
-            print(f"✅ 成功加载压缩器: {self.config.compressor_config.get('base_model', 'Qwen/Qwen3-0.6B')}")
+            print(f"✅ 成功加载压缩器: 'Qwen/Qwen3-0.6B'")
         except Exception as e:
             print(f"⚠️  无法加载预训练压缩器: {e}")
             print("使用随机初始化的压缩器")
@@ -85,13 +85,14 @@ class Qwen3AgenticModel(PreTrainedModel):
         try:
             # 尝试从预训练模型加载
             decoder_config = AutoConfig.from_pretrained(
-                self.config.decoder_config.get("base_model", "Qwen/Qwen3-14B")
+                self.config.decoder_config.base_model if hasattr(self.config.decoder_config, "base_model") else "Qwen/Qwen3-14B"
+
             )
-            self.decoder = AutoModel.from_pretrained(
-                self.config.decoder_config.get("base_model", "Qwen/Qwen3-14B"),
+            self.decoder = AutoModelForCausalLM.from_pretrained(
+                self.config.decoder_config.base_model if hasattr(self.config.decoder_config, "base_model") else "Qwen/Qwen3-14B",
                 config=decoder_config
             )
-            print(f"✅ 成功加载解码器: {self.config.decoder_config.get('base_model', 'Qwen/Qwen3-14B')}")
+            print(f"✅ 成功加载解码器: 'Qwen/Qwen3-14B")
         except Exception as e:
             print(f"⚠️  无法加载预训练解码器: {e}")
             print("使用随机初始化的解码器")
@@ -301,145 +302,6 @@ class Qwen3Agentic(Qwen3AgenticModel):
     def __init__(self, config: Qwen3AgenticConfig):
         super().__init__(config)
         
-        # 添加语言建模头
-        self.lm_head = nn.Linear(
-            config.decoder_config.get("hidden_size", 5120),
-            config.decoder_config.get("vocab_size", 151936),
-            bias=False
-        )
-        
-        self.longterm
         # 初始化权重
         self.post_init()
     
-    def get_input_embeddings(self):
-        return self.compressor.get_input_embeddings()
-    
-    def set_input_embeddings(self, value):
-        self.compressor.set_input_embeddings(value)
-    
-    def get_output_embeddings(self):
-        return self.lm_head
-    
-    def set_output_embeddings(self, new_embeddings):
-        self.lm_head = new_embeddings
-    
-    def forward(
-        self,
-        input_ids: Optional[torch.LongTensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_values: Optional[Cache] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
-        labels: Optional[torch.LongTensor] = None,
-        use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
-        **kwargs
-    ) -> Union[Tuple, CausalLMOutputWithPast]:
-        
-        # 调用父类的forward方法
-        outputs = super().forward(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-            past_key_values=past_key_values,
-            inputs_embeds=inputs_embeds,
-            labels=labels,
-            use_cache=use_cache,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-            **kwargs
-        )
-        
-        # 如果解码器输出没有logits，使用lm_head生成
-        if hasattr(outputs, 'logits') and outputs.logits is not None:
-            logits = outputs.logits
-        else:
-            # 使用最后的隐藏状态生成logits
-            if hasattr(outputs, 'hidden_states') and outputs.hidden_states is not None:
-                if isinstance(outputs.hidden_states, tuple):
-                    last_hidden_state = outputs.hidden_states[-1]
-                else:
-                    last_hidden_state = outputs.hidden_states
-            else:
-                # 如果没有隐藏状态，需要重新获取
-                last_hidden_state = self.get_last_hidden_state(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    **kwargs
-                )
-            
-            logits = self.lm_head(last_hidden_state)
-        
-        loss = None
-        if labels is not None:
-            # 计算损失
-            shift_logits = logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            loss_fct = nn.CrossEntropyLoss()
-            shift_logits = shift_logits.view(-1, self.config.decoder_config.get("vocab_size", 151936))
-            shift_labels = shift_labels.view(-1)
-            shift_labels = shift_labels.to(shift_logits.device)
-            loss = loss_fct(shift_logits, shift_labels)
-        
-        if not return_dict:
-            output = (logits,) + outputs[1:]
-            return (loss,) + output if loss is not None else output
-        
-        return CausalLMOutputWithPast(
-            loss=loss,
-            logits=logits,
-            past_key_values=outputs.past_key_values,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
-        )
-    
-    def get_last_hidden_state(self, **kwargs):
-        """获取最后的隐藏状态"""
-        # 这是一个辅助方法，用于在需要时重新计算隐藏状态
-        outputs = super().forward(return_dict=True, **kwargs)
-        if hasattr(outputs, 'hidden_states') and outputs.hidden_states is not None:
-            if isinstance(outputs.hidden_states, tuple):
-                return outputs.hidden_states[-1]
-            else:
-                return outputs.hidden_states
-        else:
-            # 如果没有隐藏状态输出，返回转换后的记忆
-            memory_tokens = self.compress_memory(**kwargs)
-            converted_memory = self.converter(memory_tokens)
-            return converted_memory
-    
-    def prepare_inputs_for_generation(
-        self,
-        input_ids,
-        past_key_values=None,
-        attention_mask=None,
-        inputs_embeds=None,
-        **kwargs
-    ):
-        """为生成准备输入"""
-        # 这个方法用于生成时的输入准备
-        # 具体实现取决于你的生成策略
-        
-        if past_key_values is not None:
-            # 如果有past_key_values，只需要最后一个token
-            input_ids = input_ids[:, -1:]
-        
-        # 如果传入了inputs_embeds且past_key_values为None，则只使用inputs_embeds
-        if inputs_embeds is not None and past_key_values is None:
-            model_inputs = {"inputs_embeds": inputs_embeds}
-        else:
-            model_inputs = {"input_ids": input_ids}
-        
-        model_inputs.update(
-            {
-                "past_key_values": past_key_values,
-                "use_cache": kwargs.get("use_cache"),
-                "attention_mask": attention_mask,
-            }
-        )
-        
-        return model_inputs

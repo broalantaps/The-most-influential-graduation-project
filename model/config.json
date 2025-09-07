@@ -4,7 +4,7 @@
     "Qwen3Agentic"
   ],
   "compressor_config": {
-    "base_model": "Qwen/Qwen3-0.6B",
+    "base_model": "/home/slgx/yuhong/base_model/Qwen/Qwen3-0.6B",
     "model_type": "compressor",
     "architectures": [
       "Qwen3ForCausalLM"
@@ -49,7 +49,7 @@
   },
   "decoder_config": {
     "model_type": "decoder",
-    "base_model": "Qwen/Qwen3-14B",
+    "base_model": "/home/slgx/yuhong/base_model/Qwen/Qwen3-14B",
     "architectures": [
       "Qwen3ForCausalLM"
     ],
