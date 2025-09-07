@@ -67,10 +67,12 @@ class Qwen3AgenticModel(PreTrainedModel):
             compressor_config = AutoConfig.from_pretrained(
                 self.config.compressor_config.base_model if hasattr(self.config.compressor_config, "base_model") else "Qwen/Qwen3-0.6B"
             )
-            self.compressor = AutoModel.from_pretrained(
-                self.config.compressor_config.base_model if hasattr(self.config.compressor_config, "base_model") else "Qwen/Qwen3-0.6B",
-                dtype=compressor_config.torch_dtype
-            )
+
+            self.compressor = AutoModel.from_config(compressor_config)
+            # self.compressor = AutoModel.from_pretrained(
+            #     self.config.compressor_config.base_model if hasattr(self.config.compressor_config, "base_model") else "Qwen/Qwen3-0.6B",
+            #     dtype=compressor_config.torch_dtype
+            # )
             
 
         except Exception as e:
@@ -88,10 +90,11 @@ class Qwen3AgenticModel(PreTrainedModel):
                 self.config.decoder_config.base_model if hasattr(self.config.decoder_config, "base_model") else "Qwen/Qwen3-14B"
 
             )
-            self.decoder = AutoModelForCausalLM.from_pretrained(
-                self.config.decoder_config.base_model if hasattr(self.config.decoder_config, "base_model") else "Qwen/Qwen3-14B",
-                dtype=decoder_config.torch_dtype
-            )
+            self.decoder = AutoModelForCausalLM.from_config(decoder_config)
+            # self.decoder = AutoModelForCausalLM.from_pretrained(
+            #     self.config.decoder_config.base_model if hasattr(self.config.decoder_config, "base_model") else "Qwen/Qwen3-14B",
+            #     dtype=decoder_config.torch_dtype
+            # )
         except Exception as e:
             logger.info(f"Init decoder error: {e}")
     
