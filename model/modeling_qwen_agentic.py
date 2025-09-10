@@ -13,7 +13,8 @@ from transformers.modeling_outputs import CausalLMOutputWithPast, BaseModelOutpu
 from transformers.cache_utils import Cache, DynamicCache
 from transformers.activations import ACT2FN
 from transformers.utils import logging
-from .configuration_qwen_agentic import Qwen3AgenticConfig
+
+from configuration_qwen_agentic import Qwen3AgenticConfig
 
 logger = logging.get_logger(__name__)
 
@@ -308,7 +309,7 @@ class Qwen3AgenticModel(PreTrainedModel):
         )
 
 
-class Qwen3Agentic(Qwen3AgenticModel):
+class Qwen3AgenticForCausalLM(Qwen3AgenticModel):
     """
     Qwen3 Agentic 模型 (用于因果语言建模)
     """
