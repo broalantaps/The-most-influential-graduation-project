@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Qwen3 Agentic Model Implementation
-包含三个组件：Compressor (Qwen3-0.6B) + Converter + Decoder (Qwen3-14B)
-"""
 
 import torch
 import torch.nn as nn
@@ -14,7 +8,7 @@ from transformers.cache_utils import Cache, DynamicCache
 from transformers.activations import ACT2FN
 from transformers.utils import logging
 
-from .configuration_qwen_agentic import Qwen3AgenticConfig
+from configuration_qwen_agentic import Qwen3AgenticConfig
 
 logger = logging.get_logger(__name__)
 
@@ -44,9 +38,6 @@ class MemoryConverter(Qwen3MLP):
 
 
 class Qwen3AgenticModel(PreTrainedModel):
-    """
-    Qwen3 Agentic 模型主体
-    """
     config_class = Qwen3AgenticConfig
     
     def __init__(self, config: Qwen3AgenticConfig):
@@ -64,41 +55,23 @@ class Qwen3AgenticModel(PreTrainedModel):
         self.post_init()    
 
     def _init_compressor(self):
-        try:
-            compressor_config = AutoConfig.from_pretrained(
-                self.config.compressor_config.base_model if hasattr(self.config.compressor_config, "base_model") else "Qwen/Qwen3-0.6B"
-            )
+        compressor_config = AutoConfig.from_pretrained(
+            self.config.compressor_config.base_model if hasattr(self.config.compressor_config, "base_model") else "Qwen/Qwen3-0.6B"
+        )
 
-            self.compressor = AutoModel.from_config(compressor_config)
-            # self.compressor = AutoModel.from_pretrained(
-                # self.config.compressor_config.base_model if hasattr(self.config.compressor_config, "base_model") else "Qwen/Qwen3-0.6B",
-                # dtype=compressor_config.torch_dtype
-            # )
-            
-
-        except Exception as e:
-            logger.info(f"Init compressor error: {e}")
+        self.compressor = AutoModel.from_pretrained(self.config.compressor_config.base_model if hasattr(self.config.compressor_config, "base_model") else "Qwen/Qwen3-0.6B", dtype=torch.bfloat16)    
     
     def _init_converter(self):
-        try:
-            self.converter = MemoryConverter(self.config.converter_config)
-        except Exception as e:
-            logger.info(f"Init converter error: {e}")
+        self.converter = MemoryConverter(self.config.converter_config)
     
     def _init_decoder(self):
-        try:
-            decoder_config = AutoConfig.from_pretrained(
-                self.config.decoder_config.base_model if hasattr(self.config.decoder_config, "base_model") else "Qwen/Qwen3-14B"
+        decoder_config = AutoConfig.from_pretrained(
+            self.config.decoder_config.base_model if hasattr(self.config.decoder_config, "base_model") else "Qwen/Qwen3-14B"
 
-            )
-            self.decoder = AutoModelForCausalLM.from_config(decoder_config)
-            # logger.info(f"Init decoder from {self.config.decoder_config.base_model}")
-            # self.decoder = AutoModelForCausalLM.from_pretrained(
-                # self.config.decoder_config.base_model if hasattr(self.config.decoder_config, "base_model") else "Qwen/Qwen3-14B",
-                # dtype=decoder_config.torch_dtype
-            # )
-        except Exception as e:
-            logger.info(f"Init decoder error: {e}")
+        )
+
+        self.decoder = AutoModelForCausalLM.from_pretrained(self.config.decoder_config.base_model if hasattr(self.config.decoder_config, "base_model") else "Qwen/Qwen3-8B", dtype=torch.bfloat16)   
+
     
     # DEPRECATED, Seperated into outside
     # def _init_tokenizer(self):

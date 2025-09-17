@@ -133,7 +133,7 @@ class CompressorConfig(PretrainedConfig):
     >>> configuration = model.config
     ```"""
 
-    model_type = "qwen3"
+    model_type = "compressor"
     keys_to_ignore_at_inference = ["past_key_values"]
 
     # Default tensor parallel plan for base model `Qwen3`
@@ -365,7 +365,7 @@ class DecoderConfig(PretrainedConfig):
     >>> configuration = model.config
     ```"""
 
-    model_type = "decoder"
+    model_type = "compressor"
     keys_to_ignore_at_inference = ["past_key_values"]
 
     # Default tensor parallel plan for base model `Qwen3`
