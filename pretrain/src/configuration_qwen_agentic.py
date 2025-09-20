@@ -460,15 +460,34 @@ class Qwen3AgenticConfig(PretrainedConfig):
     model_type = "qwen3_agentic"
     sub_configs ={
         "compressor_config": CompressorConfig,
-        "converter_config": ConverterConfig,
-        "decoder_config": DecoderConfig,
+        "converter_config": ConverterConfig
     }
 
     def __init__(
         self,
+        vocab_size=151936,
+        hidden_size=4096,
+        intermediate_size=22016,
+        num_hidden_layers=32,
+        num_attention_heads=32,
+        num_key_value_heads=32,
+        head_dim=128,
+        hidden_act="silu",
+        max_position_embeddings=32768,
+        initializer_range=0.02,
+        rms_norm_eps=1e-6,
+        use_cache=True,
+        tie_word_embeddings=False,
+        rope_theta=10000.0,
+        rope_scaling=None,
+        attention_bias=False,
+        use_sliding_window=False,
+        sliding_window=4096,
+        max_window_layers=28,
+        layer_types=None,
+        attention_dropout=0.0,
         compressor_config=None,
         converter_config=None,
-        decoder_config=None,
         **kwargs,
     ):
         if compressor_config is None:
@@ -477,17 +496,54 @@ class Qwen3AgenticConfig(PretrainedConfig):
         if converter_config is None:
             converter_config = {}
             logger.info("Converter config is not provided, initializing with default values.")
-        if decoder_config is None:
-            decoder_config = {}
-            logger.info("Decoder config is not provided, initializing with default values.")
         
         self.compressor_config = CompressorConfig(**compressor_config)
         self.converter_config = ConverterConfig(**converter_config)
-        self.decoder_config = DecoderConfig(**decoder_config)
+        self.vocab_size = vocab_size
+        self.max_position_embeddings = max_position_embeddings
+        self.hidden_size = hidden_size
+        self.intermediate_size = intermediate_size
+        self.num_hidden_layers = num_hidden_layers
+        self.num_attention_heads = num_attention_heads
+        self.use_sliding_window = use_sliding_window
+        self.sliding_window = sliding_window if self.use_sliding_window else None
+        self.max_window_layers = max_window_layers
 
-        self.vocab_size = self.compressor_config.vocab_size
+        # for backward compatibility
+        if num_key_value_heads is None:
+            num_key_value_heads = num_attention_heads
 
-        super().__init__(**kwargs)
+        self.num_key_value_heads = num_key_value_heads
+        self.head_dim = head_dim
+        self.hidden_act = hidden_act
+        self.initializer_range = initializer_range
+        self.rms_norm_eps = rms_norm_eps
+        self.use_cache = use_cache
+        self.rope_theta = rope_theta
+        self.rope_scaling = rope_scaling
+        self.attention_bias = attention_bias
+        self.attention_dropout = attention_dropout
+        # Validate the correctness of rotary position embeddings parameters
+        # BC: if there is a 'type' field, move it to 'rope_type'.
+        if self.rope_scaling is not None and "type" in self.rope_scaling:
+            self.rope_scaling["rope_type"] = self.rope_scaling["type"]
+        rope_config_validation(self)
+
+        self.layer_types = layer_types
+        if self.layer_types is None:
+            self.layer_types = [
+                "sliding_attention"
+                if self.sliding_window is not None and i >= self.max_window_layers
+                else "full_attention"
+                for i in range(self.num_hidden_layers)
+            ]
+        layer_type_validation(self.layer_types)
+
+        super().__init__(
+            tie_word_embeddings=tie_word_embeddings,
+            **kwargs,
+        )
 
 
-__all__ = ["CompressorConfig", "ConverterConfig", "DecoderConfig", "Qwen3AgenticConfig"]
+
+__all__ = ["CompressorConfig", "ConverterConfig", "Qwen3AgenticConfig"]
