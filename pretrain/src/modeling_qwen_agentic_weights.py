@@ -63,7 +63,7 @@ class Qwen3AgenticModel(PreTrainedModel):
         print(f"Init converter success")
 
         print(f"Init decoder...")
-        self._init_decoder(config=config)
+        self._init_language_model(config=config)
         print(f"Init decoder success")
 
         # Init weights
@@ -72,17 +72,17 @@ class Qwen3AgenticModel(PreTrainedModel):
     def _init_compressor(self, config):
         # self.compressor = Qwen3Model(config=config)     
         model_name = getattr(config, "base_model", "Qwen/Qwen3-0.6B")
-        self.compressor = Qwen3Model(config)
+        self.compressor = AutoModel.from_pretrained(model_name, dtype=torch.bfloat16).to('cuda')
 
 
     def _init_converter(self, config):
         self.converter = MemoryConverter(config=config)
         self.converter.apply(self._init_weights)
 
-    def _init_decoder(self, config): 
+    def _init_language_model(self, config): 
         # self.decoder = Qwen3Model(config=config) 
         model_name = getattr(config, "base_model", "Qwen/Qwen3-8B")
-        self.model = Qwen3Model(config)
+        self.model = AutoModel.from_pretrained(model_name, dtype=torch.bfloat16).to('cuda')
 
 
     # DEPRECATED, Seperated into outside
@@ -142,7 +142,7 @@ class Qwen3AgenticModel(PreTrainedModel):
         # 具体实现取决于你想如何使用这些记忆tokens
         
         # 简单实现：将转换后的记忆作为inputs_embeds传给解码器
-        decoder_outputs = self.model(
+        decoder_outputs = self.decoder(
             inputs_embeds=converted_memory,
             attention_mask=None,  # 记忆tokens通常不需要mask
             past_key_values=past_key_values,
@@ -235,51 +235,54 @@ class Qwen3AgenticForCausalLM(Qwen3AgenticModel, GenerationMixin):
         )
 
 
+
 if __name__ == "__main__":
-    # config = Qwen3AgenticConfig.from_pretrained("/root/The-most-influential-graduation-project/model/9B-config.json")
-    model = Qwen3AgenticForCausalLM.from_pretrained("BroAlanTaps/Qwen3-Agentic-9B", trust_remote_code=True, torch_dtype=torch.bfloat16, device_map="auto")
-    print(model)
+    config = Qwen3AgenticConfig.from_pretrained("/root/The-most-influential-graduation-project/model/9B-config.json")
+    model = Qwen3AgenticForCausalLM(config=config).to("cuda")
+    # print(model)
 
-    # Qwen38b = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-8B", dtype=torch.bfloat16).to('cuda')
-    # model.lm_head = Qwen38b.lm_head
-
+    Qwen38b = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-8B", dtype=torch.bfloat16).to('cuda')
+    model.lm_head = Qwen38b.lm_head
+    
     print("Compressor params:", sum(p.numel() for p in model.compressor.parameters()))
     print("Converter params:", sum(p.numel() for p in model.converter.parameters()))
     print("Decoder params:", sum(p.numel() for p in model.model.parameters()))
     print("LM Head params:", sum(p.numel() for p in model.lm_head.parameters()))
     print("Total params:", sum(p.numel() for p in model.parameters()))
-
     # 保存权重
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-8B")
-    prompt = "OpenAI是一家什么公司？"
-    messages = [
-        {"role": "user", "content": prompt}
-    ]
-    text = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True,
-        enable_thinking=False # Switches between thinking and non-thinking modes. Default is True.
-    )
-    model_inputs = tokenizer([text], return_tensors="pt").to('cuda')
+    model.save_pretrained("/root/The-most-influential-graduation-project/ckpt/Qwen3-Agentic-9B")
+    model.push_to_hub('BroAlanTaps/Qwen3-Agentic-9B')
+    # # Test Qwen3AgenticForCausalLM Inference
+    # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-8B")
+    # prompt = "OpenAI是一家什么公司？"
+    # messages = [
+    #     {"role": "user", "content": prompt}
+    # ]
+    # text = tokenizer.apply_chat_template(
+    #     messages,
+    #     tokenize=False,
+    #     add_generation_prompt=True,
+    #     enable_thinking=False # Switches between thinking and non-thinking modes. Default is True.
+    # )
+    # model_inputs = tokenizer([text], return_tensors="pt").to('cuda')
 
     
-    # conduct text completion
-    generated_ids = model.generate(
-        **model_inputs,
-        max_new_tokens=100
-    )
-    output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist() 
+    # # conduct text completion
+    # # generated_ids = model.generate(
+    # #     **model_inputs,
+    # #     max_new_tokens=100
+    # # )
+    # # output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist() 
 
-    # parsing thinking content
-    try:
-        # rindex finding 151668 (</think>)
-        index = len(output_ids) - output_ids[::-1].index(151668)
-    except ValueError:
-        index = 0
+    # # # parsing thinking content
+    # # try:
+    # #     # rindex finding 151668 (</think>)
+    # #     index = len(output_ids) - output_ids[::-1].index(151668)
+    # # except ValueError:
+    # #     index = 0
 
-    thinking_content = tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip("\n")
-    content = tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
+    # thinking_content = tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip("\n")
+    # content = tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
 
-    print("thinking content:", thinking_content)
-    print("content:", content)
+    # print("thinking content:", thinking_content)
+    # print("content:", content)
